@@ -2,17 +2,34 @@ cmake_minimum_required(VERSION 3.30)
 set(PROJECT_NAME "minecraft-bce")
 project(${PROJECT_NAME} LANGUAGES C CXX)
 
+set(ENV{LANG} "en_US.UTF-8")
 set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
 set(CMAKE_BUILD_TYPE Debug)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_SUPPRESS_REGENERATION ON CACHE INTERNAL "")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -static-libgcc")
-set(GAME_NAME "Minecraft-Better-Cpp-Edition")
 set(CLEAN_BIN_DIR ${CMAKE_SOURCE_DIR}/build)
+
+# MSVC stuff
+set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /MTd")
+set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /MT /Zi- /DEBUG:NONE")
+set(CMAKE_EXE_LINKER_FLAGS_RELEASE "${CMAKE_EXE_LINKER_FLAGS_RELEASE} /INCREMENTAL:NO")
 
 include(FetchContent)
 
+
+
+# importing raylib (5.5)
+FetchContent_Declare(
+        raylib
+        GIT_REPOSITORY https://github.com/raysan5/raylib.git
+        GIT_TAG        5.5
+        GIT_SHALLOW    TRUE
+        GIT_PROGRESS   TRUE
+)
+FetchContent_MakeAvailable(raylib)
+FetchContent_GetProperties(raylib)
+set_target_properties(raylib PROPERTIES EXCLUDE_FROM_ALL TRUE)
 
 
 # importing ImGui (1.92.1)
@@ -28,18 +45,7 @@ set(imgui_SOURCE_DIR "${CMAKE_BINARY_DIR}/_deps/imgui-src")
 file(GLOB IMGUI_SOURCES ${imgui_SOURCE_DIR}/*.cpp)
 add_library(imgui STATIC ${IMGUI_SOURCES})
 target_include_directories(imgui PUBLIC ${imgui_SOURCE_DIR})
-
-
-# importing raylib (5.5)
-FetchContent_Declare(
-        raylib
-        GIT_REPOSITORY https://github.com/raysan5/raylib.git
-        GIT_TAG        5.5
-        GIT_SHALLOW    TRUE
-        GIT_PROGRESS   TRUE
-)
-FetchContent_MakeAvailable(raylib)
-FetchContent_GetProperties(raylib)
+set_target_properties(imgui PROPERTIES EXCLUDE_FROM_ALL TRUE)
 
 
 # importing rlImGui (HASH: 4d8a61842903978bc42adf3347cd34f4e6524efc)
@@ -55,6 +61,18 @@ set(rlImGui_SOURCE_DIR "${CMAKE_BINARY_DIR}/_deps/rlimgui-src")
 add_library(rlImGui STATIC ${rlImGui_SOURCE_DIR}/rlImGui.cpp ${rlImGui_SOURCE_DIR}/rlImGui.h)
 target_include_directories(rlImGui PUBLIC ${rlImGui_SOURCE_DIR})
 target_link_libraries(rlImGui PUBLIC raylib imgui)
+set_target_properties(rlImGui PROPERTIES EXCLUDE_FROM_ALL TRUE)
+
+
+# importing FTXUI (6.1.9)
+FetchContent_Declare(
+        ftxui
+        GIT_REPOSITORY https://github.com/ArthurSonzogni/ftxui
+        GIT_TAG v6.1.9
+        GIT_SHALLOW    TRUE
+        GIT_PROGRESS   TRUE
+)
+FetchContent_MakeAvailable(ftxui)
 
 
 # importing yaml-cpp (0.8.0)
@@ -66,6 +84,7 @@ FetchContent_Declare(
         GIT_PROGRESS   TRUE
 )
 FetchContent_MakeAvailable(yaml-cpp)
+set_target_properties(yaml-cpp PROPERTIES EXCLUDE_FROM_ALL TRUE)
 
 
 # importing TinyFileDialogs (HASH: cc6b593c029110af8045826ce691f540c85e850c)
@@ -79,17 +98,34 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(tinyfiledialogs)
 
 
-# building game
-file(GLOB_RECURSE GAME_SOURCES CONFIGURE_DEPENDS src/**)
-list(APPEND GAME_SOURCES ${tinyfiledialogs_SOURCE_DIR}/tinyfiledialogs.c)
-add_executable(${GAME_NAME} ${GAME_SOURCES})
-target_include_directories(${GAME_NAME} PRIVATE ${tinyfiledialogs_SOURCE_DIR})
-target_link_libraries(${GAME_NAME} PRIVATE rlImGui imgui raylib yaml-cpp::yaml-cpp)
+
+# common things
+file(GLOB_RECURSE COMMON_SOURCES CONFIGURE_DEPENDS src/common/**)
+set(THIRD_PARTY_DLLS_DIR "${CMAKE_SOURCE_DIR}/third-party/dlls")
 
 
-set_target_properties(${GAME_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CLEAN_BIN_DIR})
-add_custom_command(TARGET ${GAME_NAME} POST_BUILD
+# server
+file(GLOB_RECURSE SERVER_SOURCES CONFIGURE_DEPENDS src/server/**)
+message(STATUS "SERVER_SOURCES = ${SERVER_SOURCES}")
+set(SERVER_EXE_NAME minecraft-bce-server)
+add_executable(${SERVER_EXE_NAME} ${COMMON_SOURCES} ${SERVER_SOURCES} ${tinyfiledialogs_SOURCE_DIR}/tinyfiledialogs.c)
+target_include_directories(${SERVER_EXE_NAME} PRIVATE ${CMAKE_SOURCE_DIR} ${tinyfiledialogs_SOURCE_DIR})
+target_link_libraries(${SERVER_EXE_NAME} PRIVATE yaml-cpp::yaml-cpp ftxui::component ftxui::dom ftxui::screen)
+set_target_properties(${SERVER_EXE_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CLEAN_BIN_DIR}/server)
+
+
+# client
+file(GLOB_RECURSE CLIENT_SOURCES CONFIGURE_DEPENDS src/client/**)
+list(APPEND CLIENT_SOURCES ${SERVER_SOURCES})
+list(FILTER CLIENT_SOURCES EXCLUDE REGEX ".*/server/console-app")
+message(STATUS "CLIENT_SOURCES = ${CLIENT_SOURCES}")
+set(CLIENT_EXE_NAME minecraft-bce-client)
+add_executable(${CLIENT_EXE_NAME} ${COMMON_SOURCES} ${CLIENT_SOURCES} ${tinyfiledialogs_SOURCE_DIR}/tinyfiledialogs.c)
+target_include_directories(${CLIENT_EXE_NAME} PRIVATE ${CMAKE_SOURCE_DIR} ${tinyfiledialogs_SOURCE_DIR})
+target_link_libraries(${CLIENT_EXE_NAME} PRIVATE raylib imgui rlImGui yaml-cpp::yaml-cpp)
+set_target_properties(${CLIENT_EXE_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CLEAN_BIN_DIR}/client)
+add_custom_command(TARGET ${CLIENT_EXE_NAME} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_directory
-        "${CMAKE_SOURCE_DIR}/assets"
-        "${CLEAN_BIN_DIR}/assets"
+        "${CMAKE_SOURCE_DIR}/client-assets"
+        "${CLEAN_BIN_DIR}/client/assets"
 )
