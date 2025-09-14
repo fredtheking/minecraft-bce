@@ -112,6 +112,11 @@ add_executable(${SERVER_EXE_NAME} ${COMMON_SOURCES} ${SERVER_SOURCES} ${tinyfile
 target_include_directories(${SERVER_EXE_NAME} PRIVATE ${CMAKE_SOURCE_DIR} ${tinyfiledialogs_SOURCE_DIR})
 target_link_libraries(${SERVER_EXE_NAME} PRIVATE yaml-cpp::yaml-cpp ftxui::component ftxui::dom ftxui::screen)
 set_target_properties(${SERVER_EXE_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CLEAN_BIN_DIR}/server)
+add_custom_command(TARGET ${SERVER_EXE_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_SOURCE_DIR}/assets/common"
+        "${CLEAN_BIN_DIR}/server/assets"
+)
 
 
 # client
@@ -126,6 +131,9 @@ target_link_libraries(${CLIENT_EXE_NAME} PRIVATE raylib imgui rlImGui yaml-cpp::
 set_target_properties(${CLIENT_EXE_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CLEAN_BIN_DIR}/client)
 add_custom_command(TARGET ${CLIENT_EXE_NAME} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_directory
-        "${CMAKE_SOURCE_DIR}/client-assets"
+        "${CMAKE_SOURCE_DIR}/assets/client"
+        "${CLEAN_BIN_DIR}/client/assets"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_SOURCE_DIR}/assets/common"
         "${CLEAN_BIN_DIR}/client/assets"
 )
